@@ -78,8 +78,8 @@ def _build_workflow(uploaded_first_name: str, uploaded_last_name: str, prompt: s
         "7": {
             "class_type": "WanVideoImageToVideoEncode",
             "inputs": {
-                "clip_vision_start_image": ["5", 0],
-                "clip_vision_end_image": ["6", 0],
+                "start_image": ["5", 0],
+                "end_image": ["6", 0],
                 "width": 832,
                 "height": 480,
                 "num_frames": 49,
@@ -87,6 +87,7 @@ def _build_workflow(uploaded_first_name: str, uploaded_last_name: str, prompt: s
                 "start_latent_strength": 1.0,
                 "end_latent_strength": 1.0,
                 "noise_aug_strength": 0.0,
+                "fun_or_fl2v_model": True,
             },
         },
         "8": {
