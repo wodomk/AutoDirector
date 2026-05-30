@@ -258,6 +258,8 @@ def generate_clip(first_frame_path: str, last_frame_path: str, prompt: str, outp
                 "blocks_to_swap": 20,
                 "offload_txt_in": False,
                 "offload_img_in": False,
+                "offload_img_emb": False,
+                "offload_txt_emb": False,
                 "use_non_blocking": False,
                 "vace_blocks_to_swap": 0,
             },
