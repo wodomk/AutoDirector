@@ -65,7 +65,11 @@ def _build_workflow(uploaded_first_name: str, uploaded_last_name: str, prompt: s
         },
         "4": {
             "class_type": "WanVideoTextEncode",
-            "inputs": {"prompt": prompt, "text_encoder": ["3", 0]},
+            "inputs": {
+                "positive_prompt": prompt,
+                "negative_prompt": "blurry, low quality, cartoon, anime, unrealistic, bad anatomy, watermark",
+                "t5": ["3", 0],
+            },
         },
         "5": {
             "class_type": "LoadImage",
