@@ -188,7 +188,158 @@ def _find_latest_local_mp4() -> str | None:
 def generate_clip(first_frame_path: str, last_frame_path: str, prompt: str, output_path: str) -> str:
     uploaded_first = _upload_image(first_frame_path)
     uploaded_last = _upload_image(last_frame_path)
-    workflow = _build_workflow(uploaded_first, uploaded_last, prompt)
+    seed = int(time.time() * 1000) % (2**31 - 1)
+    workflow = {
+        "11": {
+            "class_type": "LoadWanVideoT5TextEncoder",
+            "inputs": {
+                "model_name": "umt5_xxl_enc_bf16.safetensors",
+                "precision": "bf16",
+                "load_device": "offload_device",
+                "quantization": "disabled",
+            },
+        },
+        "22": {
+            "class_type": "WanVideoModelLoader",
+            "inputs": {
+                "model": "WanVideo/fp8_scaled_kj/T2V/Wan2_1-T2V-14B_fp8_e4m3fn_scaled_KJ.safetensors",
+                "base_precision": "bf16",
+                "load_device": "main_device",
+                "quantization": "disabled",
+            },
+        },
+        "38": {
+            "class_type": "WanVideoVAELoader",
+            "inputs": {
+                "model_name": "wanvideo/Wan2_1_VAE_bf16.safetensors",
+                "precision": "bf16",
+                "use_cpu_cache": False,
+                "verbose": False,
+            },
+        },
+        "16": {
+            "class_type": "WanVideoTextEncode",
+            "inputs": {
+                "positive_prompt": prompt,
+                "negative_prompt": "blurry, low quality, cartoon, anime, unrealistic, bad anatomy, watermark",
+                "force_offload": True,
+                "use_disk_cache": False,
+                "device": "gpu",
+                "t5": ["11", 0],
+            },
+        },
+        "5": {
+            "class_type": "LoadImage",
+            "inputs": {"image": uploaded_first, "upload": "image"},
+        },
+        "6": {
+            "class_type": "LoadImage",
+            "inputs": {"image": uploaded_last, "upload": "image"},
+        },
+        "37": {
+            "class_type": "WanVideoImageToVideoEncode",
+            "inputs": {
+                "width": 832,
+                "height": 480,
+                "num_frames": 49,
+                "noise_aug_strength": 0.0,
+                "start_latent_strength": 1.0,
+                "end_latent_strength": 1.0,
+                "force_offload": True,
+                "fun_or_fl2v_model": True,
+                "start_image": ["5", 0],
+                "end_image": ["6", 0],
+                "vae": ["38", 0],
+            },
+        },
+        "39": {
+            "class_type": "WanVideoBlockSwap",
+            "inputs": {
+                "blocks_to_swap": 20,
+                "offload_txt_in": False,
+                "offload_img_in": False,
+                "use_non_blocking": False,
+                "vace_blocks_to_swap": 0,
+            },
+        },
+        "56": {
+            "class_type": "WanVideoSetBlockSwap",
+            "inputs": {"model": ["22", 0], "block_swap_args": ["39", 0]},
+        },
+        "58": {
+            "class_type": "WanVideoSetLoRAs",
+            "inputs": {"model": ["22", 0], "lora": ["60", 0]},
+        },
+        "60": {
+            "class_type": "WanVideoLoraSelectMulti",
+            "inputs": {
+                "lora_0": "None",
+                "strength_0": 1.0,
+                "lora_1": "None",
+                "strength_1": 1.0,
+                "lora_2": "None",
+                "strength_2": 1.0,
+                "lora_3": "None",
+                "strength_3": 1.0,
+                "lora_4": "None",
+                "strength_4": 1.0,
+            },
+        },
+        "55": {
+            "class_type": "WanVideoEnhanceAVideo",
+            "inputs": {"weight": 2.0, "start_percent": 0.0, "end_percent": 1.0},
+        },
+        "27": {
+            "class_type": "WanVideoSampler",
+            "inputs": {
+                "steps": 20,
+                "cfg": 6.0,
+                "shift": 5.0,
+                "seed": seed,
+                "control_after_generate": "fixed",
+                "force_offload": True,
+                "scheduler": "dpm++_sde",
+                "riflex_freq_index": 0,
+                "denoise_strength": 1.0,
+                "batched_cfg": False,
+                "rope_function": "comfy",
+                "start_step": 0,
+                "end_step": -1,
+                "add_noise_to_samples": False,
+                "model": ["56", 0],
+                "image_embeds": ["37", 0],
+                "text_embeds": ["16", 0],
+                "feta_args": ["55", 0],
+            },
+        },
+        "28": {
+            "class_type": "WanVideoDecode",
+            "inputs": {
+                "enable_vae_tiling": False,
+                "tile_x": 272,
+                "tile_y": 272,
+                "tile_stride_x": 144,
+                "tile_stride_y": 128,
+                "vae": ["38", 0],
+                "samples": ["27", 0],
+            },
+        },
+        "30": {
+            "class_type": "VHS_VideoCombine",
+            "inputs": {
+                "frame_rate": 24,
+                "loop_count": 0,
+                "filename_prefix": "AutoDirector",
+                "format": "video/h264-mp4",
+                "pix_fmt": "yuv420p",
+                "crf": 19,
+                "save_metadata": True,
+                "pingpong": False,
+                "save_output": True,
+                "images": ["28", 0],
+            },
+        },
+    }
 
     try:
         submit_resp = requests.post(
