@@ -112,6 +112,10 @@ def _build_workflow(uploaded_first_name: str, uploaded_last_name: str, prompt: s
                 "samples": ["8", 0],
                 "vae": ["2", 0],
                 "enable_vae_tiling": False,
+                "tile_x": 272,
+                "tile_y": 272,
+                "tile_stride_x": 144,
+                "tile_stride_y": 128,
             },
         },
         "10": {
