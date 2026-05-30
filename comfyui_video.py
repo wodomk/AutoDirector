@@ -1,5 +1,7 @@
 import os
 import time
+import json
+import glob
 from typing import Any
 
 import requests
@@ -135,23 +137,46 @@ def _build_workflow(uploaded_first_name: str, uploaded_last_name: str, prompt: s
 
 def _extract_video_meta(history_item: dict[str, Any]) -> dict[str, str]:
     outputs = history_item.get("outputs", {})
-    for node_data in outputs.values():
-        for key in ("videos", "gifs", "files", "images"):
-            entries = node_data.get(key)
-            if not isinstance(entries, list) or not entries:
-                continue
-            first = entries[0]
-            if not isinstance(first, dict):
-                continue
-            filename = first.get("filename")
-            if not filename or not str(filename).lower().endswith(".mp4"):
-                continue
-            return {
-                "filename": str(filename),
-                "subfolder": str(first.get("subfolder", "")),
-                "type": str(first.get("type", "output")),
-            }
+
+    def _walk(node: Any) -> dict[str, str] | None:
+        if isinstance(node, dict):
+            filename = node.get("filename")
+            file_type = node.get("type")
+            if (
+                isinstance(filename, str)
+                and filename.lower().endswith(".mp4")
+                and str(file_type) == "output"
+            ):
+                return {
+                    "filename": filename,
+                    "subfolder": str(node.get("subfolder", "")),
+                    "type": "output",
+                }
+            for value in node.values():
+                found = _walk(value)
+                if found:
+                    return found
+        elif isinstance(node, list):
+            for item in node:
+                found = _walk(item)
+                if found:
+                    return found
+        return None
+
+    found_meta = _walk(outputs)
+    if found_meta:
+        return found_meta
+
+    print("DEBUG: MP4 not found in ComfyUI history outputs. Full outputs structure:")
+    print(json.dumps(outputs, indent=2, ensure_ascii=False, default=str))
     raise RuntimeError("ComfyUI history does not contain MP4 metadata.")
+
+
+def _find_latest_local_mp4() -> str | None:
+    candidates = glob.glob(os.path.join("ComfyUI", "output", "**", "*.mp4"), recursive=True)
+    if not candidates:
+        return None
+    return max(candidates, key=os.path.getmtime)
 
 
 def generate_clip(first_frame_path: str, last_frame_path: str, prompt: str, output_path: str) -> str:
@@ -200,24 +225,33 @@ def generate_clip(first_frame_path: str, last_frame_path: str, prompt: str, outp
     if history_item is None:
         raise TimeoutError("Timed out waiting for video generation (1800 seconds).")
 
-    video_meta = _extract_video_meta(history_item)
-
-    try:
-        view_resp = requests.get(
-            f"{COMFYUI_BASE_URL}/view",
-            params=video_meta,
-            timeout=300,
-        )
-        view_resp.raise_for_status()
-    except requests.RequestException as exc:
-        raise RuntimeError(f"Failed to download MP4 from ComfyUI: {exc}") from exc
-
     output_dir = os.path.dirname(os.path.abspath(output_path))
     if output_dir:
         os.makedirs(output_dir, exist_ok=True)
 
-    with open(output_path, "wb") as f:
-        f.write(view_resp.content)
+    try:
+        video_meta = _extract_video_meta(history_item)
+        try:
+            view_resp = requests.get(
+                f"{COMFYUI_BASE_URL}/view",
+                params={
+                    "filename": video_meta["filename"],
+                    "type": "output",
+                },
+                timeout=300,
+            )
+            view_resp.raise_for_status()
+        except requests.RequestException as exc:
+            raise RuntimeError(f"Failed to download MP4 from ComfyUI: {exc}") from exc
+
+        with open(output_path, "wb") as f:
+            f.write(view_resp.content)
+    except RuntimeError:
+        latest_local_mp4 = _find_latest_local_mp4()
+        if not latest_local_mp4:
+            raise
+        with open(latest_local_mp4, "rb") as src, open(output_path, "wb") as dst:
+            dst.write(src.read())
 
     return output_path
 
