@@ -42,14 +42,20 @@ def _upload_image(image_path: str) -> str:
 
 
 def _build_workflow(uploaded_first_name: str, uploaded_last_name: str, prompt: str) -> dict[str, Any]:
+    seed = int(time.time() * 1000) % (2**31 - 1)
     return {
         "1": {
             "class_type": "WanVideoModelLoader",
-            "inputs": {"model_name": WAN_VIDEO_MODEL},
+            "inputs": {
+                "model": WAN_VIDEO_MODEL,
+                "load_device": "gpu",
+                "base_precision": "fp8_e4m3fn",
+                "quantization": "disabled",
+            },
         },
         "2": {
             "class_type": "WanVideoVAELoader",
-            "inputs": {"vae_name": WAN_VAE_MODEL},
+            "inputs": {"model_name": WAN_VAE_MODEL},
         },
         "3": {
             "class_type": "LoadWanVideoT5TextEncoder",
@@ -68,34 +74,52 @@ def _build_workflow(uploaded_first_name: str, uploaded_last_name: str, prompt: s
             "inputs": {"image": uploaded_last_name, "upload": "image"},
         },
         "7": {
+            "class_type": "WanVideoImageToVideoEncode",
+            "inputs": {
+                "clip_vision_start_image": ["5", 0],
+                "clip_vision_end_image": ["6", 0],
+            },
+        },
+        "8": {
             "class_type": "WanVideoSampler",
             "inputs": {
                 "model": ["1", 0],
                 "vae": ["2", 0],
                 "conditioning": ["4", 0],
-                "first_frame": ["5", 0],
-                "last_frame": ["6", 0],
+                "image_embeds": ["7", 0],
                 "steps": 20,
                 "frames": 49,
                 "width": 832,
                 "height": 480,
                 "cfg": 6.0,
-            },
-        },
-        "8": {
-            "class_type": "WanVideoDecode",
-            "inputs": {
-                "samples": ["7", 0],
-                "vae": ["2", 0],
+                "scheduler": "dpm++_sde",
+                "riflex_freq_index": 0,
+                "shift": 5.0,
+                "force_offload": True,
+                "seed": seed,
             },
         },
         "9": {
+            "class_type": "WanVideoDecode",
+            "inputs": {
+                "samples": ["8", 0],
+                "vae": ["2", 0],
+                "tile_x": False,
+                "tile_y": False,
+                "tile_stride_x": 64,
+                "tile_stride_y": 64,
+            },
+        },
+        "10": {
             "class_type": "VHS_VideoCombine",
             "inputs": {
-                "images": ["8", 0],
+                "images": ["9", 0],
                 "frame_rate": 24,
                 "format": "video/h264-mp4",
                 "filename_prefix": "wan_flf2v",
+                "loop_count": 0,
+                "save_output": True,
+                "pingpong": False,
             },
         },
     }
