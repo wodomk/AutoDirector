@@ -202,7 +202,7 @@ def generate_clip(first_frame_path: str, last_frame_path: str, prompt: str, outp
         "22": {
             "class_type": "WanVideoModelLoader",
             "inputs": {
-                "model": "WanVideo/fp8_scaled_kj/T2V/Wan2_1-T2V-14B_fp8_e4m3fn_scaled_KJ.safetensors",
+                "model": "WanVideo/fp8_scaled_kj/I2V/Wan2_1-I2V-14B_fp8_e4m3fn_scaled_KJ.safetensors",
                 "base_precision": "bf16",
                 "load_device": "main_device",
                 "quantization": "disabled",
