@@ -57,7 +57,7 @@ def _build_workflow(uploaded_first_name: str, uploaded_last_name: str, prompt: s
         },
         "2": {
             "class_type": "WanVideoVAELoader",
-            "inputs": {"model_name": WAN_VAE_MODEL},
+            "inputs": {"model_name": WAN_VAE_MODEL, "precision": "bf16"},
         },
         "3": {
             "class_type": "LoadWanVideoT5TextEncoder",
