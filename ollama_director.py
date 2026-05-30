@@ -44,40 +44,49 @@ def _validate_shotlist(data: Any) -> list[dict]:
 
 
 def generate_shotlist(prompt: str) -> list[dict]:
-    payload = {
-        "model": OLLAMA_MODEL,
-        "system": SYSTEM_PROMPT,
-        "prompt": prompt,
-        "stream": False,
-    }
-
     try:
-        response = requests.post(OLLAMA_URL, json=payload, timeout=120)
-        response.raise_for_status()
-    except requests.RequestException as exc:
-        raise RuntimeError(f"Failed to call Ollama API: {exc}") from exc
+        payload = {
+            "model": OLLAMA_MODEL,
+            "system": SYSTEM_PROMPT,
+            "prompt": prompt,
+            "stream": False,
+        }
 
-    try:
-        api_data = response.json()
-    except ValueError as exc:
-        raise RuntimeError("Ollama API returned non-JSON response.") from exc
-
-    llm_text = api_data.get("response")
-    if not isinstance(llm_text, str):
-        raise RuntimeError("Ollama API response does not contain 'response' text.")
-
-    try:
-        parsed = json.loads(llm_text)
-    except json.JSONDecodeError:
-        extracted = _extract_json_array(llm_text)
-        if not extracted:
-            raise RuntimeError("Could not parse shot list JSON from model response.")
         try:
-            parsed = json.loads(extracted)
-        except json.JSONDecodeError as exc:
-            raise RuntimeError("Extracted JSON is still invalid.") from exc
+            response = requests.post(OLLAMA_URL, json=payload, timeout=120)
+            response.raise_for_status()
+        except requests.RequestException as exc:
+            raise RuntimeError(f"Failed to call Ollama API: {exc}") from exc
 
-    return _validate_shotlist(parsed)
+        try:
+            api_data = response.json()
+        except ValueError as exc:
+            raise RuntimeError("Ollama API returned non-JSON response.") from exc
+
+        llm_text = api_data.get("response")
+        if not isinstance(llm_text, str):
+            raise RuntimeError("Ollama API response does not contain 'response' text.")
+
+        try:
+            parsed = json.loads(llm_text)
+        except json.JSONDecodeError:
+            extracted = _extract_json_array(llm_text)
+            if not extracted:
+                raise RuntimeError("Could not parse shot list JSON from model response.")
+            try:
+                parsed = json.loads(extracted)
+            except json.JSONDecodeError as exc:
+                raise RuntimeError("Extracted JSON is still invalid.") from exc
+
+        return _validate_shotlist(parsed)
+    finally:
+        try:
+            requests.post(
+                "http://localhost:11434/api/generate",
+                json={"model": "gemma4:e4b", "keep_alive": 0},
+            )
+        except requests.RequestException:
+            pass
 
 
 def main() -> None:
