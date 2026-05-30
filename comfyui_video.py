@@ -80,6 +80,7 @@ def _build_workflow(uploaded_first_name: str, uploaded_last_name: str, prompt: s
             "inputs": {
                 "start_image": ["5", 0],
                 "end_image": ["6", 0],
+                "vae": ["2", 0],
                 "width": 832,
                 "height": 480,
                 "num_frames": 49,
