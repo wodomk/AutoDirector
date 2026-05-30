@@ -1,5 +1,7 @@
 import asyncio
 import os
+import subprocess
+import time
 from typing import Any, Callable
 
 import comfyui_frames
@@ -15,6 +17,12 @@ class Director:
 
     def _cb(self, stage: str, percent: int, message: str, data: Any = None) -> None:
         self.progress_callback(stage, percent, message, data)
+
+    def restart_comfyui(self) -> None:
+        subprocess.run(["pkill", "-f", "python main.py"], cwd="/home/ai/ComfyUI")
+        time.sleep(5)
+        subprocess.Popen(["python3", "main.py", "--listen", "0.0.0.0"], cwd="/home/ai/ComfyUI")
+        time.sleep(15)  # czeka az ComfyUI wstanie
 
     async def run_job(self, job_id: str, prompt: str, frames: int, width: int, height: int, steps: int) -> str | None:
         job_dir = os.path.join(self.output_root, job_id)
@@ -46,6 +54,8 @@ class Director:
 
             if len(frame_paths) < 2:
                 raise RuntimeError("Do stworzenia klipu potrzeba co najmniej 2 klatek.")
+
+            await asyncio.to_thread(self.restart_comfyui)
 
             clip_paths: list[str] = []
             pairs = len(frame_paths) - 1
