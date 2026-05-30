@@ -48,8 +48,8 @@ def _build_workflow(uploaded_first_name: str, uploaded_last_name: str, prompt: s
             "class_type": "WanVideoModelLoader",
             "inputs": {
                 "model": WAN_VIDEO_MODEL,
-                "load_device": "gpu",
-                "base_precision": "fp8_e4m3fn",
+                "load_device": "main_device",
+                "base_precision": "bf16",
                 "quantization": "disabled",
             },
         },
@@ -78,6 +78,13 @@ def _build_workflow(uploaded_first_name: str, uploaded_last_name: str, prompt: s
             "inputs": {
                 "clip_vision_start_image": ["5", 0],
                 "clip_vision_end_image": ["6", 0],
+                "width": 832,
+                "height": 480,
+                "num_frames": 49,
+                "force_offload": True,
+                "start_latent_strength": 1.0,
+                "end_latent_strength": 1.0,
+                "noise_aug_strength": 0.0,
             },
         },
         "8": {
@@ -104,10 +111,7 @@ def _build_workflow(uploaded_first_name: str, uploaded_last_name: str, prompt: s
             "inputs": {
                 "samples": ["8", 0],
                 "vae": ["2", 0],
-                "tile_x": False,
-                "tile_y": False,
-                "tile_stride_x": 64,
-                "tile_stride_y": 64,
+                "enable_vae_tiling": False,
             },
         },
         "10": {
