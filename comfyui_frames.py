@@ -62,9 +62,9 @@ def _build_workflow(description: str, reference_image_name: str | None = None) -
                 "class_type": "CLIPVisionLoader",
                 "inputs": {"clip_name": "clip_vision_vit_h.safetensors"},
             },
-            "ip_load": {
-                "class_type": "IPAdapterUnifiedLoader",
-                "inputs": {"model": ["ckpt_loader", 0], "preset": "PLUS (high strength)"},
+            "ip_model_loader": {
+                "class_type": "IPAdapterModelLoader",
+                "inputs": {"ipadapter_file": "ip-adapter-plus_sd15.bin"},
             },
             "load_ref": {
                 "class_type": "LoadImage",
@@ -77,8 +77,8 @@ def _build_workflow(description: str, reference_image_name: str | None = None) -
             "ip_apply": {
                 "class_type": "IPAdapterAdvanced",
                 "inputs": {
-                    "model": ["ip_load", 0],
-                    "ipadapter": ["ip_load", 1],
+                    "model": ["ckpt_loader", 0],
+                    "ipadapter": ["ip_model_loader", 0],
                     "image": ["load_ref", 0],
                     "clip_vision": ["clip_vision_loader", 0],
                     "weight": 0.65,
