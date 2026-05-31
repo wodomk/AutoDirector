@@ -168,8 +168,14 @@ def _get_generated_image(time_before: float, output_path: str) -> str:
         raise RuntimeError("No PNG files found in /home/ai/ComfyUI/output")
 
     filtered = [p for p in candidates if os.path.getmtime(p) > time_before]
+    print(f"Szukam plikow po czasie {time_before}, znalezione: {filtered}")
     if not filtered:
-        raise RuntimeError("No generated PNG found after prompt start time.")
+        time.sleep(5)
+        candidates_retry = glob.glob(os.path.join(base_dir, "*.png"))
+        filtered = [p for p in candidates_retry if os.path.getmtime(p) > time_before]
+        print(f"Szukam plikow po czasie {time_before}, znalezione: {filtered}")
+        if not filtered:
+            raise RuntimeError("No generated PNG found after prompt start time.")
 
     latest_png = max(filtered, key=os.path.getmtime)
     shutil.copyfile(latest_png, output_path)
@@ -182,7 +188,7 @@ def generate_keyframe(description: str, output_path: str, reference_image_path: 
         reference_image_name = _upload_image(reference_image_path)
 
     workflow = _build_workflow(description, reference_image_name)
-    time_before = time.time()
+    time_before = time.time() - 5
 
     try:
         submit_resp = requests.post(
@@ -232,6 +238,7 @@ def generate_keyframe(description: str, output_path: str, reference_image_path: 
     if output_dir:
         os.makedirs(output_dir, exist_ok=True)
 
+    time.sleep(3)
     return _get_generated_image(time_before, output_path)
 
 
