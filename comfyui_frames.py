@@ -114,7 +114,7 @@ def _build_workflow(description: str, reference_image_name: str | None = None) -
             },
             "save": {
                 "class_type": "SaveImage",
-                "inputs": {"images": ["decode", 0], "filename_prefix": "codex_frame"},
+                "inputs": {"images": ["decode", 0], "filename_prefix": "AutoDirector_frame"},
             },
         }
 
@@ -156,14 +156,14 @@ def _build_workflow(description: str, reference_image_name: str | None = None) -
         },
         "save": {
             "class_type": "SaveImage",
-            "inputs": {"images": ["decode", 0], "filename_prefix": "codex_frame"},
+            "inputs": {"images": ["decode", 0], "filename_prefix": "AutoDirector_frame"},
         },
     }
 
 
 def _get_generated_image(time_before: float, output_path: str) -> str:
     base_dir = "/home/ai/ComfyUI/output"
-    candidates = glob.glob(os.path.join(base_dir, "**", "*.png"), recursive=True)
+    candidates = glob.glob(os.path.join(base_dir, "*.png"))
     if not candidates:
         raise RuntimeError("No PNG files found in /home/ai/ComfyUI/output")
 
