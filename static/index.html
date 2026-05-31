@@ -71,8 +71,9 @@
         <textarea id="prompt" placeholder="Np. Bohater idzie przez neonowe miasto podczas deszczu..."></textarea>
         <div class="row">
           <div>
-            <label for="frames">Frames: <span id="framesVal">49</span></label>
-            <input id="frames" type="range" min="17" max="121" value="49" />
+            <label for="duration">Duration: <span id="durationVal">10s</span></label>
+            <input id="duration" type="range" min="0" max="3" value="0" />
+            <div id="durationInfo" class="muted">Klatek kluczowych: 6 | Szacowany czas: 90 minut</div>
           </div>
           <div>
             <label for="steps">Steps: <span id="stepsVal">20</span></label>
@@ -122,9 +123,10 @@
 
   <script>
     const promptEl = document.getElementById('prompt');
-    const framesEl = document.getElementById('frames');
+    const durationEl = document.getElementById('duration');
     const stepsEl = document.getElementById('steps');
-    const framesVal = document.getElementById('framesVal');
+    const durationVal = document.getElementById('durationVal');
+    const durationInfo = document.getElementById('durationInfo');
     const stepsVal = document.getElementById('stepsVal');
     const resEl = document.getElementById('res');
     const runBtn = document.getElementById('runBtn');
@@ -146,9 +148,18 @@
 
     let pollTimer = null;
     let currentJob = null;
+    const durationOptions = [10, 20, 30, 60];
 
-    framesEl.oninput = () => framesVal.textContent = framesEl.value;
+    function updateDurationUi() {
+      const duration = durationOptions[Number(durationEl.value)] || 10;
+      const keyframes = Math.floor(duration / 2) + 1;
+      const estMinutes = (keyframes - 1) * 18;
+      durationVal.textContent = `${duration}s`;
+      durationInfo.textContent = `Klatek kluczowych: ${keyframes} | Szacowany czas: ${estMinutes} minut`;
+    }
+    durationEl.oninput = updateDurationUi;
     stepsEl.oninput = () => stepsVal.textContent = stepsEl.value;
+    updateDurationUi();
 
     function setStage(stage) {
       ['s-scenario','s-frames','s-video','s-assembly'].forEach(id => {
@@ -226,9 +237,10 @@
       statusText.textContent = 'Uruchamiam job...';
 
       const [w, h] = resEl.value.split('x').map(Number);
+      const duration = durationOptions[Number(durationEl.value)] || 10;
       const payload = {
         prompt,
-        frames: Number(framesEl.value),
+        duration,
         width: w,
         height: h,
         steps: Number(stepsEl.value)

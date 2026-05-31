@@ -25,7 +25,7 @@ os.makedirs(BASE_OUTPUT_DIR, exist_ok=True)
 
 class GenerateRequest(BaseModel):
     prompt: str = Field(min_length=1)
-    frames: int = Field(default=49, ge=17, le=121)
+    duration: int = Field(default=10, ge=10)
     width: int = Field(default=832)
     height: int = Field(default=480)
     steps: int = Field(default=20, ge=10, le=30)
@@ -122,10 +122,10 @@ async def generate(req: GenerateRequest) -> dict[str, str]:
         director.run_job(
             job_id=job_id,
             prompt=req.prompt,
-            frames=req.frames,
             width=req.width,
             height=req.height,
             steps=req.steps,
+            duration_seconds=req.duration,
         )
     )
 

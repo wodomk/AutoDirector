@@ -9,7 +9,6 @@ import requests
 COMFYUI_BASE_URL = "http://localhost:8188"
 NEGATIVE_PROMPT = "deformed faces, extra limbs, extra fingers, fused fingers, bad anatomy, ugly faces, distorted body, multiple heads, cloned faces, mutation, blurry, low quality, cartoon, anime, unrealistic, watermark, text, signature, out of frame, cropped"
 CHECKPOINT_NAME = "Realistic_Vision_V5.1_fp16-no-ema.safetensors"
-VAE_NAME = "vae-ft-mse-840000-ema-pruned.safetensors"
 
 
 def _upload_image(image_path: str) -> str:
@@ -43,25 +42,97 @@ def _upload_image(image_path: str) -> str:
 
 def _build_workflow(description: str, reference_image_name: str | None = None) -> dict[str, Any]:
     seed = random.randint(0, 2**31 - 1)
+    if reference_image_name:
+        return {
+            "ckpt_loader": {
+                "class_type": "CheckpointLoaderSimple",
+                "inputs": {"ckpt_name": CHECKPOINT_NAME},
+            },
+            "pos_encode": {
+                "class_type": "CLIPTextEncode",
+                "inputs": {"text": description, "clip": ["ckpt_loader", 1]},
+            },
+            "neg_encode": {
+                "class_type": "CLIPTextEncode",
+                "inputs": {"text": NEGATIVE_PROMPT, "clip": ["ckpt_loader", 1]},
+            },
+            "clip_vision_loader": {
+                "class_type": "CLIPVisionLoader",
+                "inputs": {"clip_name": "clip_vision_vit_h.safetensors"},
+            },
+            "ip_load": {
+                "class_type": "IPAdapterUnifiedLoader",
+                "inputs": {"model": ["ckpt_loader", 0], "preset": "PLUS (high strength)"},
+            },
+            "load_ref": {
+                "class_type": "LoadImage",
+                "inputs": {"image": reference_image_name, "upload": "image"},
+            },
+            "vae_encode": {
+                "class_type": "VAEEncode",
+                "inputs": {"pixels": ["load_ref", 0], "vae": ["ckpt_loader", 2]},
+            },
+            "ip_apply": {
+                "class_type": "IPAdapterAdvanced",
+                "inputs": {
+                    "model": ["ip_load", 0],
+                    "ipadapter": ["ip_load", 1],
+                    "image": ["load_ref", 0],
+                    "clip_vision": ["clip_vision_loader", 0],
+                    "weight": 0.65,
+                    "weight_type": "linear",
+                    "start_at": 0.0,
+                    "end_at": 1.0,
+                    "combine_embeds": "concat",
+                },
+            },
+            "empty_latent": {
+                "class_type": "EmptyLatentImage",
+                "inputs": {"width": 832, "height": 480, "batch_size": 1},
+            },
+            "ksampler": {
+                "class_type": "KSampler",
+                "inputs": {
+                    "seed": seed,
+                    "steps": 35,
+                    "cfg": 7.5,
+                    "sampler_name": "euler",
+                    "scheduler": "normal",
+                    "denoise": 0.55,
+                    "model": ["ip_apply", 0],
+                    "positive": ["pos_encode", 0],
+                    "negative": ["neg_encode", 0],
+                    "latent_image": ["vae_encode", 0],
+                },
+            },
+            "decode": {
+                "class_type": "VAEDecode",
+                "inputs": {"samples": ["ksampler", 0], "vae": ["ckpt_loader", 2]},
+            },
+            "save": {
+                "class_type": "SaveImage",
+                "inputs": {"images": ["decode", 0], "filename_prefix": "codex_frame"},
+            },
+        }
 
-    workflow: dict[str, Any] = {
-        "1": {
+    return {
+        "ckpt_loader": {
             "class_type": "CheckpointLoaderSimple",
             "inputs": {"ckpt_name": CHECKPOINT_NAME},
         },
-        "2": {
-            "class_type": "VAELoader",
-            "inputs": {"vae_name": VAE_NAME},
-        },
-        "3": {
+        "pos_encode": {
             "class_type": "CLIPTextEncode",
-            "inputs": {"text": description, "clip": ["1", 1]},
+            "inputs": {"text": description, "clip": ["ckpt_loader", 1]},
         },
-        "4": {
+        "neg_encode": {
             "class_type": "CLIPTextEncode",
-            "inputs": {"text": NEGATIVE_PROMPT, "clip": ["1", 1]},
+            "inputs": {"text": NEGATIVE_PROMPT, "clip": ["ckpt_loader", 1]},
         },
-        "6": {
+        "empty_latent": {
+            "class_type": "EmptyLatentImage",
+            "inputs": {"width": 832, "height": 480, "batch_size": 1},
+        },
+        "ksampler": {
             "class_type": "KSampler",
             "inputs": {
                 "seed": seed,
@@ -70,62 +141,21 @@ def _build_workflow(description: str, reference_image_name: str | None = None) -
                 "sampler_name": "euler",
                 "scheduler": "normal",
                 "denoise": 1.0,
-                "model": ["1", 0],
-                "positive": ["3", 0],
-                "negative": ["4", 0],
-                "latent_image": ["5", 0],
+                "model": ["ckpt_loader", 0],
+                "positive": ["pos_encode", 0],
+                "negative": ["neg_encode", 0],
+                "latent_image": ["empty_latent", 0],
             },
         },
-        "7": {
+        "decode": {
             "class_type": "VAEDecode",
-            "inputs": {"samples": ["6", 0], "vae": ["2", 0]},
+            "inputs": {"samples": ["ksampler", 0], "vae": ["ckpt_loader", 2]},
         },
-        "8": {
+        "save": {
             "class_type": "SaveImage",
-            "inputs": {"images": ["7", 0], "filename_prefix": "codex_frame"},
+            "inputs": {"images": ["decode", 0], "filename_prefix": "codex_frame"},
         },
     }
-
-    if reference_image_name:
-        workflow["5"] = {
-            "class_type": "VAEEncode",
-            "inputs": {"pixels": ["9", 0], "vae": ["2", 0]},
-        }
-        workflow["6"]["inputs"]["denoise"] = 0.75
-        workflow["9"] = {
-            "class_type": "LoadImage",
-            "inputs": {"image": reference_image_name, "upload": "image"},
-        }
-        workflow["clip_vision_loader"] = {
-            "class_type": "CLIPVisionLoader",
-            "inputs": {"clip_name": "clip_vision_vit_h.safetensors"},
-        }
-        workflow["ip_load"] = {
-            "class_type": "IPAdapterUnifiedLoader",
-            "inputs": {"model": ["1", 0], "preset": "PLUS (high strength)"},
-        }
-        workflow["ip_apply"] = {
-            "class_type": "IPAdapterAdvanced",
-            "inputs": {
-                "model": ["ip_load", 0],
-                "ipadapter": ["ip_load", 1],
-                "image": ["9", 0],
-                "clip_vision": ["clip_vision_loader", 0],
-                "weight": 0.6,
-                "weight_type": "linear",
-                "start_at": 0.0,
-                "end_at": 1.0,
-                "combine_embeds": "concat",
-            },
-        }
-        workflow["6"]["inputs"]["model"] = ["ip_apply", 0]
-    else:
-        workflow["5"] = {
-            "class_type": "EmptyLatentImage",
-            "inputs": {"width": 832, "height": 480, "batch_size": 1},
-        }
-
-    return workflow
 
 
 def _extract_first_image_meta(history_item: dict[str, Any]) -> dict[str, str]:

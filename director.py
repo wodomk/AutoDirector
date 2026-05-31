@@ -69,13 +69,26 @@ class Director:
 
             conn.commit()
 
-    async def run_job(self, job_id: str, prompt: str, frames: int, width: int, height: int, steps: int) -> str | None:
+    async def run_job(
+        self,
+        job_id: str,
+        prompt: str,
+        width: int,
+        height: int,
+        steps: int,
+        duration_seconds: int,
+    ) -> str | None:
         job_dir = os.path.join(self.output_root, job_id)
         os.makedirs(job_dir, exist_ok=True)
 
         try:
             self.db_update(job_id, "scenario", 5, "Generowanie shot listy...")
-            shot_list = await asyncio.to_thread(ollama_director.generate_shotlist, prompt)
+            num_keyframes = (duration_seconds // 2) + 1
+            shot_list = await asyncio.to_thread(
+                ollama_director.generate_shotlist,
+                prompt,
+                num_keyframes,
+            )
             self.db_update(job_id, "scenario", 25, "Shot lista gotowa", {"shot_list": shot_list})
 
             frame_paths: list[str] = []
@@ -85,7 +98,7 @@ class Director:
             for idx, shot in enumerate(shot_list, start=1):
                 description = shot.get("description", prompt) if isinstance(shot, dict) else prompt
                 frame_path = os.path.join(job_dir, f"frame_{idx:03d}.png")
-                ref = frame_paths[-1] if frame_paths else None
+                ref = None if idx == 1 else frame_paths[-1]
                 await asyncio.to_thread(comfyui_frames.generate_keyframe, description, frame_path, ref)
                 frame_paths.append(frame_path)
                 frame_urls.append(f"/artifacts/{job_id}/frame_{idx:03d}.png")

@@ -14,7 +14,10 @@ SYSTEM_PROMPT = (
     "detailed prompt for Stable Diffusion image generation in English), camera_angle "
     "(str, e.g. wide shot / close-up / medium shot / POV), consistency_anchors (list "
     "of str, visual elements that must stay identical to previous frame e.g. character "
-    "clothing, location details, lighting)."
+    "clothing, location details, lighting). For each frame include 'consistency_anchors' "
+    "describing EXACTLY: main character appearance (fur color, pattern, size), exact "
+    "location in room, lighting direction and color. These must be IDENTICAL across all "
+    "frames to ensure visual consistency."
 )
 
 
@@ -43,12 +46,12 @@ def _validate_shotlist(data: Any) -> list[dict]:
     return validated
 
 
-def generate_shotlist(prompt: str) -> list[dict]:
+def generate_shotlist(prompt: str, num_frames: int = 5) -> list[dict]:
     try:
         payload = {
             "model": OLLAMA_MODEL,
             "system": SYSTEM_PROMPT,
-            "prompt": prompt,
+            "prompt": f"{prompt}\n\nGenerate EXACTLY {num_frames} keyframes, no more, no less.",
             "stream": False,
         }
 
