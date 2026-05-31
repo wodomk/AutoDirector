@@ -12,7 +12,36 @@ CHECKPOINT_NAME = "Realistic_Vision_V5.1_fp16-no-ema.safetensors"
 VAE_NAME = "vae-ft-mse-840000-ema-pruned.safetensors"
 
 
-def _build_workflow(description: str, reference_image_path: str | None = None) -> dict[str, Any]:
+def _upload_image(image_path: str) -> str:
+    if not os.path.isfile(image_path):
+        raise FileNotFoundError(f"Image does not exist: {image_path}")
+
+    with open(image_path, "rb") as f:
+        files = {"image": (os.path.basename(image_path), f, "image/png")}
+        data = {"overwrite": "true", "type": "input"}
+        try:
+            resp = requests.post(
+                f"{COMFYUI_BASE_URL}/upload/image",
+                files=files,
+                data=data,
+                timeout=120,
+            )
+            resp.raise_for_status()
+        except requests.RequestException as exc:
+            raise RuntimeError(f"Failed to upload image '{image_path}': {exc}") from exc
+
+    try:
+        payload = resp.json()
+    except ValueError as exc:
+        raise RuntimeError("ComfyUI /upload/image returned non-JSON response.") from exc
+
+    name = payload.get("name") or payload.get("filename")
+    if not isinstance(name, str) or not name:
+        raise RuntimeError(f"Upload response missing file name for '{image_path}'.")
+    return name
+
+
+def _build_workflow(description: str, reference_image_name: str | None = None) -> dict[str, Any]:
     seed = random.randint(0, 2**31 - 1)
 
     workflow: dict[str, Any] = {
@@ -57,7 +86,7 @@ def _build_workflow(description: str, reference_image_path: str | None = None) -
         },
     }
 
-    if reference_image_path:
+    if reference_image_name:
         workflow["5"] = {
             "class_type": "VAEEncode",
             "inputs": {"pixels": ["9", 0], "vae": ["2", 0]},
@@ -65,8 +94,31 @@ def _build_workflow(description: str, reference_image_path: str | None = None) -
         workflow["6"]["inputs"]["denoise"] = 0.75
         workflow["9"] = {
             "class_type": "LoadImage",
-            "inputs": {"image": reference_image_path, "upload": "image"},
+            "inputs": {"image": reference_image_name, "upload": "image"},
         }
+        workflow["clip_vision_loader"] = {
+            "class_type": "CLIPVisionLoader",
+            "inputs": {"clip_name": "clip_vision_vit_h.safetensors"},
+        }
+        workflow["ip_load"] = {
+            "class_type": "IPAdapterUnifiedLoader",
+            "inputs": {"model": ["1", 0], "preset": "PLUS (high strength)"},
+        }
+        workflow["ip_apply"] = {
+            "class_type": "IPAdapterAdvanced",
+            "inputs": {
+                "model": ["ip_load", 0],
+                "ipadapter": ["ip_load", 1],
+                "image": ["9", 0],
+                "clip_vision": ["clip_vision_loader", 0],
+                "weight": 0.6,
+                "weight_type": "linear",
+                "start_at": 0.0,
+                "end_at": 1.0,
+                "combine_embeds": "concat",
+            },
+        }
+        workflow["6"]["inputs"]["model"] = ["ip_apply", 0]
     else:
         workflow["5"] = {
             "class_type": "EmptyLatentImage",
@@ -96,7 +148,11 @@ def _extract_first_image_meta(history_item: dict[str, Any]) -> dict[str, str]:
 
 
 def generate_keyframe(description: str, output_path: str, reference_image_path: str = None) -> str:
-    workflow = _build_workflow(description, reference_image_path)
+    reference_image_name = None
+    if reference_image_path:
+        reference_image_name = _upload_image(reference_image_path)
+
+    workflow = _build_workflow(description, reference_image_name)
 
     try:
         submit_resp = requests.post(
