@@ -84,6 +84,7 @@ def _build_workflow(description: str, reference_image_name: str | None = None) -
                     "start_at": 0.0,
                     "end_at": 1.0,
                     "combine_embeds": "concat",
+                    "embeds_scaling": "V only",
                 },
             },
             "empty_latent": {
