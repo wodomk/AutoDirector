@@ -7,7 +7,7 @@ import requests
 
 
 COMFYUI_BASE_URL = "http://localhost:8188"
-NEGATIVE_PROMPT = "blurry, low quality, cartoon, anime, unrealistic, bad anatomy"
+NEGATIVE_PROMPT = "deformed faces, extra limbs, extra fingers, fused fingers, bad anatomy, ugly faces, distorted body, multiple heads, cloned faces, mutation, blurry, low quality, cartoon, anime, unrealistic, watermark, text, signature, out of frame, cropped"
 CHECKPOINT_NAME = "Realistic_Vision_V5.1_fp16-no-ema.safetensors"
 VAE_NAME = "vae-ft-mse-840000-ema-pruned.safetensors"
 
@@ -36,8 +36,8 @@ def _build_workflow(description: str, reference_image_path: str | None = None) -
             "class_type": "KSampler",
             "inputs": {
                 "seed": seed,
-                "steps": 25,
-                "cfg": 7,
+                "steps": 35,
+                "cfg": 7.5,
                 "sampler_name": "euler",
                 "scheduler": "normal",
                 "denoise": 1.0,
