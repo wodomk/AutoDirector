@@ -1,5 +1,4 @@
 import json
-import re
 from typing import Any
 
 import requests
@@ -19,13 +18,6 @@ SYSTEM_PROMPT = (
     "location in room, lighting direction and color. These must be IDENTICAL across all "
     "frames to ensure visual consistency."
 )
-
-
-def _extract_json_array(text: str) -> str | None:
-    match = re.search(r"\[\s*\{.*?\}\s*\]", text, re.DOTALL)
-    if match:
-        return match.group(0)
-    return None
 
 
 def _validate_shotlist(data: Any) -> list[dict]:
@@ -59,29 +51,47 @@ def generate_shotlist(prompt: str, num_frames: int = 5) -> list[dict]:
             response = requests.post(OLLAMA_URL, json=payload, timeout=120)
             response.raise_for_status()
         except requests.RequestException as exc:
-            raise RuntimeError(f"Failed to call Ollama API: {exc}") from exc
+            print(f"Failed to call Ollama API: {exc}")
+            return []
 
         try:
             api_data = response.json()
         except ValueError as exc:
-            raise RuntimeError("Ollama API returned non-JSON response.") from exc
+            print(f"Ollama API returned non-JSON response: {exc}")
+            return []
 
-        llm_text = api_data.get("response")
+        llm_text = api_data.get("response", "")
         if not isinstance(llm_text, str):
-            raise RuntimeError("Ollama API response does not contain 'response' text.")
+            llm_text = str(llm_text)
 
+        parsed: Any = None
         try:
             parsed = json.loads(llm_text)
-        except json.JSONDecodeError:
-            extracted = _extract_json_array(llm_text)
-            if not extracted:
-                raise RuntimeError("Could not parse shot list JSON from model response.")
+        except Exception:
+            first_arr = llm_text.find("[")
+            last_arr = llm_text.rfind("]")
             try:
-                parsed = json.loads(extracted)
-            except json.JSONDecodeError as exc:
-                raise RuntimeError("Extracted JSON is still invalid.") from exc
+                if first_arr != -1 and last_arr != -1 and first_arr < last_arr:
+                    parsed = json.loads(llm_text[first_arr:last_arr + 1])
+                else:
+                    raise ValueError("Array brackets not found")
+            except Exception:
+                first_obj = llm_text.find("{")
+                last_obj = llm_text.rfind("}")
+                try:
+                    if first_obj != -1 and last_obj != -1 and first_obj < last_obj:
+                        parsed = json.loads(f"[{llm_text[first_obj:last_obj + 1]}]")
+                    else:
+                        raise ValueError("Object braces not found")
+                except Exception as exc:
+                    print(f"Failed to parse shot list JSON: {exc}")
+                    return []
 
-        return _validate_shotlist(parsed)
+        try:
+            return _validate_shotlist(parsed)
+        except Exception as exc:
+            print(f"Shot list validation failed: {exc}")
+            return []
     finally:
         try:
             requests.post(
