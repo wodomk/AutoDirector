@@ -73,7 +73,7 @@
           <div>
             <label for="duration">Duration: <span id="durationVal">10s</span></label>
             <input id="duration" type="range" min="0" max="3" value="0" />
-            <div id="durationInfo" class="muted">Klatek kluczowych: 6 | Szacowany czas: 90 minut</div>
+            <div id="durationInfo" class="muted">Klatek kluczowych: 11 | Szacowany czas: 180 minut</div>
           </div>
           <div>
             <label for="steps">Steps: <span id="stepsVal">20</span></label>
@@ -152,7 +152,7 @@
 
     function updateDurationUi() {
       const duration = durationOptions[Number(durationEl.value)] || 10;
-      const keyframes = Math.floor(duration / 2) + 1;
+      const keyframes = duration + 1;
       const estMinutes = (keyframes - 1) * 18;
       durationVal.textContent = `${duration}s`;
       durationInfo.textContent = `Klatek kluczowych: ${keyframes} | Szacowany czas: ${estMinutes} minut`;

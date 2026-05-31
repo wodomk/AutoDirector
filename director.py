@@ -83,7 +83,7 @@ class Director:
 
         try:
             self.db_update(job_id, "scenario", 5, "Generowanie shot listy...")
-            num_keyframes = (duration_seconds // 2) + 1
+            num_keyframes = duration_seconds + 1
             shot_list = await asyncio.to_thread(
                 ollama_director.generate_shotlist,
                 prompt,
