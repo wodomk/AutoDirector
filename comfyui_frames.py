@@ -1,6 +1,8 @@
 import os
 import random
 import time
+import glob
+import shutil
 from typing import Any
 
 import requests
@@ -159,23 +161,19 @@ def _build_workflow(description: str, reference_image_name: str | None = None) -
     }
 
 
-def _extract_first_image_meta(history_item: dict[str, Any]) -> dict[str, str]:
-    outputs = history_item.get("outputs", {})
-    for node_data in outputs.values():
-        images = node_data.get("images")
-        if images and isinstance(images, list):
-            first = images[0]
-            if isinstance(first, dict):
-                filename = first.get("filename")
-                subfolder = first.get("subfolder", "")
-                img_type = first.get("type", "output")
-                if filename:
-                    return {
-                        "filename": filename,
-                        "subfolder": subfolder,
-                        "type": img_type,
-                    }
-    raise RuntimeError("ComfyUI history does not contain generated image metadata.")
+def _get_generated_image(time_before: float, output_path: str) -> str:
+    base_dir = "/home/ai/ComfyUI/output"
+    candidates = glob.glob(os.path.join(base_dir, "**", "*.png"), recursive=True)
+    if not candidates:
+        raise RuntimeError("No PNG files found in /home/ai/ComfyUI/output")
+
+    filtered = [p for p in candidates if os.path.getmtime(p) > time_before]
+    if not filtered:
+        raise RuntimeError("No generated PNG found after prompt start time.")
+
+    latest_png = max(filtered, key=os.path.getmtime)
+    shutil.copyfile(latest_png, output_path)
+    return output_path
 
 
 def generate_keyframe(description: str, output_path: str, reference_image_path: str = None) -> str:
@@ -184,6 +182,7 @@ def generate_keyframe(description: str, output_path: str, reference_image_path: 
         reference_image_name = _upload_image(reference_image_path)
 
     workflow = _build_workflow(description, reference_image_name)
+    time_before = time.time()
 
     try:
         submit_resp = requests.post(
@@ -205,7 +204,7 @@ def generate_keyframe(description: str, output_path: str, reference_image_path: 
         raise RuntimeError("ComfyUI response does not contain prompt_id.")
 
     deadline = time.time() + 300
-    history_item: dict[str, Any] | None = None
+    is_done = False
 
     while time.time() < deadline:
         try:
@@ -221,34 +220,19 @@ def generate_keyframe(description: str, output_path: str, reference_image_path: 
             raise RuntimeError("ComfyUI /history returned non-JSON response.") from exc
 
         if isinstance(history_data, dict) and prompt_id in history_data:
-            history_item = history_data[prompt_id]
+            is_done = True
             break
 
         time.sleep(2)
 
-    if history_item is None:
+    if not is_done:
         raise TimeoutError("Timed out waiting for ComfyUI generation (300 seconds).")
-
-    image_meta = _extract_first_image_meta(history_item)
-
-    try:
-        image_resp = requests.get(
-            f"{COMFYUI_BASE_URL}/view",
-            params=image_meta,
-            timeout=120,
-        )
-        image_resp.raise_for_status()
-    except requests.RequestException as exc:
-        raise RuntimeError(f"Failed to download generated image from ComfyUI: {exc}") from exc
 
     output_dir = os.path.dirname(os.path.abspath(output_path))
     if output_dir:
         os.makedirs(output_dir, exist_ok=True)
 
-    with open(output_path, "wb") as f:
-        f.write(image_resp.content)
-
-    return output_path
+    return _get_generated_image(time_before, output_path)
 
 
 def main() -> None:
